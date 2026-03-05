@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<title>Rohit AI Chatbot</title>
+
+<meta name="description" content="ML chatbot built from scratch in JavaScript">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+
+html,body{
+height:100%;
+overflow:hidden;
+}
+
+</style>
+
+</head>
+
+<body class="bg-gray-100">
+
+<!-- NAVBAR -->
+
+<header class="fixed top-0 left-0 w-full bg-white border-b z-10">
+
+<div class="max-w-3xl mx-auto flex items-center justify-between px-4 py-3">
+
+<h1 class="font-semibold text-lg">
+Rohit AI
+</h1>
+
+<span class="text-sm text-gray-500">
+ML Chatbot
+</span>
+
+</div>
+
+</header>
+
+<!-- CHAT AREA -->
+
+<div class="pt-16 h-full flex flex-col">
+
+<div id="chat" class="flex-1 overflow-y-auto px-4 py-4 space-y-3 max-w-3xl mx-auto w-full">
+
+</div>
+
+<!-- INPUT -->
+
+<div class="border-t bg-white">
+
+<div class="max-w-3xl mx-auto flex gap-2 p-3">
+
+<input
+id="input"
+class="flex-1 border rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+placeholder="Message Rohit..."
+/>
+
+<button
+onclick="send()"
+class="bg-blue-600 text-white px-4 rounded-xl hover:bg-blue-700">
+
+Send
+
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+<script src="model.js"></script>
+<script src="responses.js"></script>
+
+<script>
+
+/* ---------------- NLP FUNCTIONS ---------------- */
+
+function similarity(a,b){
+
+a=a.toLowerCase()
+b=b.toLowerCase()
+
+let matches=0
+
+for(let i=0;i<Math.min(a.length,b.length);i++){
+
+if(a[i]===b[i]) matches++
+
+}
+
+return matches/Math.max(a.length,b.length)
+
+}
+
+function correctWord(word,vocab){
+
+let best=word
+let bestScore=0
+
+for(let v of vocab){
+
+let score=similarity(word,v)
+
+if(score>bestScore && score>0.7){
+
+bestScore=score
+best=v
+
+}
+
+}
+
+return best
+
+}
+
+function stem(word){
+
+word=word.replace(/ing$/,"")
+word=word.replace(/edly$/,"")
+word=word.replace(/ly$/,"")
+word=word.replace(/ed$/,"")
+word=word.replace(/s$/,"")
+
+return word
+
+}
+
+function generateNgram(tokens){
+
+const ngram=[...tokens]
+
+for(let i=0;i<tokens.length-1;i++){
+
+ngram.push(tokens[i]+"_"+tokens[i+1])
+
+}
+
+return ngram
+
+}
+
+function tokenizer(sentence,vocab=[]){
+
+sentence=sentence.toLowerCase()
+
+sentence=sentence.replace(/[^\w\s]/g,"")
+
+let tokens=sentence.split(/\s+/)
+
+tokens=tokens.map(stem)
+
+tokens=tokens.map(w=>correctWord(w,vocab))
+
+tokens=generateNgram(tokens)
+
+return tokens
+
+}
+
+/* ---------------- MODEL ---------------- */
+
+const vocab = MODEL_DATA.vocabulary
+const intentCounts = MODEL_DATA.intentCounts
+const wordCounts = MODEL_DATA.wordCounts
+const intentWordCounts = MODEL_DATA.intentWordCounts
+
+function vectorize(text){
+
+const tokens=tokenizer(text,vocab)
+
+const vector=new Array(vocab.length).fill(0)
+
+tokens.forEach(token=>{
+
+const index=vocab.indexOf(token)
+
+if(index!==-1){
+
+vector[index]=1
+
+}
+
+})
+
+return vector
+
+}
+
+function predict(text){
+
+const vector=vectorize(text)
+
+let bestIntent=null
+let bestScore=-Infinity
+
+for(let intent in intentCounts){
+
+let score=Math.log(intentCounts[intent])
+
+for(let i=0;i<vector.length;i++){
+
+if(vector[i]){
+
+const wordCount=wordCounts[intent][i]+1
+
+const total=intentWordCounts[intent]+vocab.length
+
+score+=Math.log(wordCount/total)
+
+}
+
+}
+
+if(score>bestScore){
+
+bestScore=score
+bestIntent=intent
+
+}
+
+}
+
+return bestIntent
+
+}
+
+function botReply(text){
+
+const intent=predict(text)
+
+const replies=responses[intent]
+
+if(!replies) return "Sorry I didn't understand."
+
+return replies[Math.floor(Math.random()*replies.length)]
+
+}
+
+/* ---------------- UI ---------------- */
+
+const chat=document.getElementById("chat")
+const input=document.getElementById("input")
+
+function addMessage(text,type){
+
+const wrapper=document.createElement("div")
+
+wrapper.className=type==="user"
+? "flex justify-end"
+: "flex justify-start"
+
+const bubble=document.createElement("div")
+
+bubble.className=type==="user"
+? "bg-blue-600 text-white px-4 py-2 rounded-xl max-w-xs"
+: "bg-white border px-4 py-2 rounded-xl max-w-xs"
+
+bubble.innerText=text
+
+wrapper.appendChild(bubble)
+
+chat.appendChild(wrapper)
+
+chat.scrollTop=chat.scrollHeight
+
+}
+
+function send(){
+
+const text=input.value.trim()
+
+if(!text) return
+
+addMessage(text,"user")
+
+input.value=""
+
+setTimeout(()=>{
+
+const reply=botReply(text)
+
+addMessage(reply,"bot")
+
+},300)
+
+}
+
+input.addEventListener("keypress",e=>{
+
+if(e.key==="Enter") send()
+
+})
+
+</script>
+
+</body>
+</html>
